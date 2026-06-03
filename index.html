@@ -423,7 +423,7 @@ input[type=range]::-webkit-slider-thumb {
   <span class="upload-icon">🎵</span>
   <div class="upload-title">Drop Your Song Here</div>
   <div class="upload-sub">MP3 · WAV · Any Audio File</div>
-  <input type="file" id="fileInput" accept="audio/*">
+  <input type="file" id="fileInput" accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov">
 </div>
 
 <div class="song-info" id="songInfo">
@@ -792,7 +792,19 @@ document.getElementById('tempoSlider').addEventListener('input', function() {
   document.getElementById('bpmDisplay').textContent = bpm;
 });
 
-// ─── Audio Engine ─────────────────────────────────────────
+// ─── Audio Engine — Real Drum Samples ─────────────────────
+const SAMPLE_URLS = {
+  KICK:  'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/percussion-mp3/Bass_Drum_1.mp3',
+  SNARE: 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/percussion-mp3/Acoustic_Snare.mp3',
+  HIHAT: 'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/percussion-mp3/Closed_Hi-Hat.mp3',
+  BASS:  'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/percussion-mp3/Low_Floor_Tom.mp3',
+  PERC:  'https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/percussion-mp3/High_Wood_Block.mp3',
+};
+
+const sampleBuffers = {};
+let samplesLoaded = false;
+let samplesLoading = false;
+
 function getCtx() {
   if (!audioCtx || audioCtx.state === 'closed') {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -801,69 +813,97 @@ function getCtx() {
   return audioCtx;
 }
 
+async function loadSamples() {
+  if (samplesLoaded || samplesLoading) return;
+  samplesLoading = true;
+  setStatus('LOADING DRUMS...', 'playing');
+  const ctx = getCtx();
+  let loaded = 0;
+  const total = Object.keys(SAMPLE_URLS).length;
+  await Promise.all(Object.entries(SAMPLE_URLS).map(async ([name, url]) => {
+    try {
+      const res = await fetch(url);
+      const arr = await res.arrayBuffer();
+      sampleBuffers[name] = await ctx.decodeAudioData(arr);
+      loaded++;
+      setStatus(`LOADING ${loaded}/${total}...`, 'playing');
+    } catch(e) {
+      sampleBuffers[name] = null;
+    }
+  }));
+  samplesLoaded = true;
+  samplesLoading = false;
+  setStatus('DRUMS READY — HIT PLAY');
+}
+
+const TRACK_GAIN = { KICK:1.6, SNARE:1.1, HIHAT:0.55, BASS:1.2, PERC:0.75 };
+
 function createDrum(type, time) {
   const ctx = getCtx();
-  const buf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
-  const data = buf.getChannelData(0);
+
+  if (samplesLoaded && sampleBuffers[type]) {
+    const src = ctx.createBufferSource();
+    src.buffer = sampleBuffers[type];
+    const gain = ctx.createGain();
+    gain.gain.value = TRACK_GAIN[type] || 1.0;
+    src.connect(gain);
+    gain.connect(ctx.destination);
+    src.start(time);
+    return;
+  }
+
+  // Improved fallback synth
   const gain = ctx.createGain();
   gain.connect(ctx.destination);
-
   if (type === 'KICK') {
     const osc = ctx.createOscillator();
     osc.connect(gain);
-    osc.frequency.setValueAtTime(150, time);
-    osc.frequency.exponentialRampToValueAtTime(0.001, time + 0.4);
-    gain.gain.setValueAtTime(1.2, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.4);
-    osc.start(time); osc.stop(time + 0.4);
+    osc.frequency.setValueAtTime(180, time);
+    osc.frequency.exponentialRampToValueAtTime(0.001, time+0.5);
+    gain.gain.setValueAtTime(2.0, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time+0.5);
+    osc.start(time); osc.stop(time+0.5);
   } else if (type === 'SNARE') {
-    const noise = ctx.createBufferSource();
-    for(let i=0;i<data.length;i++) data[i] = Math.random()*2-1;
-    noise.buffer = buf;
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = 3000;
-    noise.connect(filter); filter.connect(gain);
-    gain.gain.setValueAtTime(0.8, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
-    noise.start(time); noise.stop(time + 0.18);
-    // tone layer
-    const osc = ctx.createOscillator();
-    const g2 = ctx.createGain();
-    osc.connect(g2); g2.connect(ctx.destination);
-    osc.frequency.value = 200;
-    g2.gain.setValueAtTime(0.4, time);
-    g2.gain.exponentialRampToValueAtTime(0.001, time+0.1);
-    osc.start(time); osc.stop(time+0.1);
-  } else if (type === 'HIHAT') {
-    const noise = ctx.createBufferSource();
-    for(let i=0;i<data.length;i++) data[i]=Math.random()*2-1;
-    noise.buffer=buf;
-    const filter=ctx.createBiquadFilter();
-    filter.type='highpass'; filter.frequency.value=8000;
-    noise.connect(filter); filter.connect(gain);
-    gain.gain.setValueAtTime(0.3, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time+0.05);
-    noise.start(time); noise.stop(time+0.05);
-  } else if (type === 'BASS') {
-    const osc = ctx.createOscillator();
-    osc.type = 'sawtooth';
-    osc.connect(gain);
-    osc.frequency.setValueAtTime(80, time);
-    osc.frequency.exponentialRampToValueAtTime(40, time+0.15);
-    gain.gain.setValueAtTime(0.5, time);
+    const bufLen = ctx.sampleRate * 0.2;
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<bufLen;i++) d[i]=Math.random()*2-1;
+    const noise=ctx.createBufferSource(); noise.buffer=buf;
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=2500; bp.Q.value=0.8;
+    noise.connect(bp); bp.connect(gain);
+    gain.gain.setValueAtTime(1.2, time);
     gain.gain.exponentialRampToValueAtTime(0.001, time+0.2);
-    osc.start(time); osc.stop(time+0.2);
-  } else if (type === 'PERC') {
-    const noise = ctx.createBufferSource();
-    for(let i=0;i<data.length;i++) data[i]=Math.random()*2-1;
-    noise.buffer=buf;
-    const filter=ctx.createBiquadFilter();
-    filter.type='bandpass'; filter.frequency.value=1200;
-    noise.connect(filter); filter.connect(gain);
-    gain.gain.setValueAtTime(0.25, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time+0.08);
+    noise.start(time); noise.stop(time+0.2);
+    const osc=ctx.createOscillator(); const g2=ctx.createGain();
+    osc.connect(g2); g2.connect(ctx.destination);
+    osc.frequency.value=185;
+    g2.gain.setValueAtTime(0.6, time); g2.gain.exponentialRampToValueAtTime(0.001, time+0.12);
+    osc.start(time); osc.stop(time+0.12);
+  } else if (type === 'HIHAT') {
+    const bufLen=ctx.sampleRate*0.08;
+    const buf=ctx.createBuffer(1,bufLen,ctx.sampleRate);
+    const d=buf.getChannelData(0);
+    for(let i=0;i<bufLen;i++) d[i]=Math.random()*2-1;
+    const noise=ctx.createBufferSource(); noise.buffer=buf;
+    const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=9000;
+    noise.connect(hp); hp.connect(gain);
+    gain.gain.setValueAtTime(0.4, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time+0.06);
     noise.start(time); noise.stop(time+0.08);
+  } else if (type === 'BASS') {
+    const osc=ctx.createOscillator(); osc.type='triangle'; osc.connect(gain);
+    osc.frequency.setValueAtTime(90, time);
+    osc.frequency.exponentialRampToValueAtTime(50, time+0.25);
+    gain.gain.setValueAtTime(0.9, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time+0.3);
+    osc.start(time); osc.stop(time+0.3);
+  } else if (type === 'PERC') {
+    const osc=ctx.createOscillator(); osc.type='sine'; osc.connect(gain);
+    osc.frequency.setValueAtTime(600, time);
+    osc.frequency.exponentialRampToValueAtTime(200, time+0.1);
+    gain.gain.setValueAtTime(0.5, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time+0.1);
+    osc.start(time); osc.stop(time+0.1);
   }
 }
 
