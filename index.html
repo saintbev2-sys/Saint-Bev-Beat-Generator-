@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saint Bev Beat Generator</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+
+:root {
+  --bg: #080808;
+  --panel: #111;
+  --border: #222;
+  --gold: #c9a84c;
+  --gold2: #f0c96e;
+  --red: #e03c31;
+  --green: #39d98a;
+  --white: #ede8df;
+  --dim: #555;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--white);
+  font-family: 'Space Mono', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* grain overlay */
+body::before {
+  content:'';
+  position:fixed;
+  inset:0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events:none;
+  z-index:999;
+  opacity:0.4;
+}
+
+header {
+  padding: 32px 20px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.logo {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 42px;
+  letter-spacing: 2px;
+  color: var(--gold);
+  line-height: 1;
+}
+
+.logo span { color: var(--white); }
+
+.tagline {
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+/* UPLOAD ZONE */
+.upload-zone {
+  margin: 24px 20px;
+  border: 1px dashed #333;
+  border-radius: 2px;
+  padding: 32px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  position: relative;
+  background: var(--panel);
+}
+
+.upload-zone:hover, .upload-zone.drag { border-color: var(--gold); background: #161616; }
+
+.upload-icon {
+  font-size: 36px;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.upload-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 22px;
+  color: var(--white);
+  margin-bottom: 6px;
+  letter-spacing: 1px;
+}
+
+.upload-sub {
+  font-size: 9px;
+  color: var(--dim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+#fileInput { display:none; }
+
+/* SONG INFO */
+.song-info {
+  margin: 0 20px 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 16px;
+  display: none;
+}
+
+.song-name {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 20px;
+  color: var(--gold);
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.song-meta {
+  font-size: 9px;
+  color: var(--dim);
+  letter-spacing: 1px;
+}
+
+/* ANALYZING */
+.analyzing {
+  margin: 0 20px 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 20px;
+  display: none;
+  text-align: center;
+}
+
+.analyzing-text {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 18px;
+  color: var(--gold);
+  letter-spacing: 2px;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+.progress-bar {
+  margin-top: 12px;
+  height: 2px;
+  background: var(--border);
+  width: 100%;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--gold);
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+/* BEAT DISPLAY */
+.beat-panel {
+  margin: 0 20px 20px;
+  display: none;
+}
+
+.beat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+
+.beat-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 28px;
+  color: var(--white);
+  letter-spacing: 1px;
+}
+
+.beat-bpm {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 36px;
+  color: var(--gold);
+  line-height: 1;
+}
+
+.beat-bpm-label {
+  font-size: 8px;
+  color: var(--dim);
+  letter-spacing: 2px;
+  text-align: right;
+}
+
+/* SEQUENCER */
+.seq-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.track-name {
+  font-size: 8px;
+  color: var(--dim);
+  letter-spacing: 1px;
+  width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.steps {
+  display: flex;
+  gap: 3px;
+  flex: 1;
+}
+
+.step {
+  flex: 1;
+  height: 28px;
+  border-radius: 2px;
+  background: var(--border);
+  position: relative;
+  transition: background 0.1s;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.step.on { background: var(--gold); }
+.step.on.kick { background: var(--red); }
+.step.on.snare { background: var(--white); }
+.step.on.hihat { background: var(--gold2); }
+.step.on.bass { background: #4ecdc4; }
+.step.on.perc { background: #a78bfa; }
+
+.step.active {
+  outline: 2px solid var(--gold2);
+  outline-offset: 1px;
+}
+
+/* BEAT INFO CARDS */
+.beat-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.beat-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 12px;
+}
+
+.beat-card-label {
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.beat-card-val {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 18px;
+  color: var(--gold);
+  letter-spacing: 0.5px;
+}
+
+/* CONTROLS */
+.controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 16px;
+  letter-spacing: 1px;
+  padding: 12px 20px;
+  border: none;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.btn:active { transform: scale(0.97); }
+
+.btn-play {
+  background: var(--gold);
+  color: var(--bg);
+  flex: 1;
+}
+
+.btn-stop {
+  background: var(--red);
+  color: var(--white);
+  flex: 1;
+}
+
+.btn-regen {
+  background: var(--border);
+  color: var(--dim);
+  flex: 1;
+}
+
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* AI DESCRIPTION */
+.ai-desc {
+  background: var(--panel);
+  border-left: 2px solid var(--gold);
+  padding: 14px;
+  margin-bottom: 16px;
+  font-size: 11px;
+  color: #aaa;
+  line-height: 1.7;
+  font-style: italic;
+}
+
+/* WAVEFORM VIZ */
+.viz {
+  height: 48px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px;
+  overflow: hidden;
+}
+
+.viz-bar {
+  flex: 1;
+  background: var(--border);
+  border-radius: 1px;
+  transition: height 0.1s ease, background 0.1s;
+  min-height: 2px;
+}
+
+.viz-bar.active { background: var(--gold); }
+
+/* TEMPO SLIDER */
+.tempo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tempo-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--dim);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+input[type=range] {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 2px;
+  background: var(--border);
+  outline: none;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--gold);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.tempo-val {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 18px;
+  color: var(--gold);
+  min-width: 40px;
+  text-align: right;
+}
+
+/* STATUS */
+.status {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--dim);
+  text-align: center;
+  padding: 12px;
+  text-transform: uppercase;
+}
+
+.status.playing { color: var(--green); animation: pulse 1.5s infinite; }
+.status.error { color: var(--red); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Saint <span>Bev</span></div>
+  <div class="tagline">AI Beat Generator // Drop Your Song → Get A Beat</div>
+</header>
+
+<div class="upload-zone" id="uploadZone">
+  <span class="upload-icon">🎵</span>
+  <div class="upload-title">Drop Your Song Here</div>
+  <div class="upload-sub">MP3 · WAV · Any Audio File</div>
+  <input type="file" id="fileInput" accept="audio/*">
+</div>
+
+<div class="song-info" id="songInfo">
+  <div class="song-name" id="songName">—</div>
+  <div class="song-meta" id="songMeta">—</div>
+</div>
+
+<div class="analyzing" id="analyzing">
+  <div class="analyzing-text">ANALYZING YOUR SOUND...</div>
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+</div>
+
+<div class="beat-panel" id="beatPanel">
+  <div class="beat-header">
+    <div>
+      <div class="beat-title" id="beatTitle">GENERATED BEAT</div>
+      <div style="font-size:9px;color:var(--dim);letter-spacing:1px;" id="beatStyle">—</div>
+    </div>
+    <div style="text-align:right">
+      <div class="beat-bpm" id="bpmDisplay">90</div>
+      <div class="beat-bpm-label">BPM</div>
+    </div>
+  </div>
+
+  <div class="beat-cards" id="beatCards"></div>
+
+  <div class="ai-desc" id="aiDesc">Analyzing your track...</div>
+
+  <div class="viz" id="viz"></div>
+
+  <div class="seq-label">16-STEP SEQUENCER</div>
+  <div id="sequencer"></div>
+
+  <div class="tempo-row">
+    <span class="tempo-label">Tempo</span>
+    <input type="range" id="tempoSlider" min="60" max="180" value="90">
+    <span class="tempo-val" id="tempoVal">90</span>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-play" id="playBtn" onclick="playBeat()">▶ PLAY BEAT</button>
+    <button class="btn btn-stop" id="stopBtn" onclick="stopBeat()" disabled>■ STOP</button>
+    <button class="btn btn-regen" id="regenBtn" onclick="regenBeat()">↺ NEW PATTERN</button>
+  </div>
+
+  <div class="status" id="status">READY</div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────
+let audioCtx = null;
+let isPlaying = false;
+let currentStep = 0;
+let schedulerTimer = null;
+let nextNoteTime = 0;
+let bpm = 90;
+let songDuration = 0;
+let uploadedFile = null;
+let audioBuffer = null;
+
+const STEPS = 16;
+const TRACKS = ['KICK','SNARE','HIHAT','BASS','PERC'];
+const TRACK_CLASSES = ['kick','snare','hihat','bass','perc'];
+
+let patterns = {
+  KICK:  Array(16).fill(false),
+  SNARE: Array(16).fill(false),
+  HIHAT: Array(16).fill(false),
+  BASS:  Array(16).fill(false),
+  PERC:  Array(16).fill(false),
+};
+
+// ─── Upload ───────────────────────────────────────────────
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+function handleFile(file) {
+  uploadedFile = file;
+  const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+  document.getElementById('songName').textContent = file.name.replace(/\.[^/.]+$/, '');
+  document.getElementById('songMeta').textContent = `${file.type || 'audio'} · ${sizeMB}MB`;
+  document.getElementById('songInfo').style.display = 'block';
+  document.getElementById('analyzing').style.display = 'block';
+  document.getElementById('beatPanel').style.display = 'none';
+
+  // Decode audio for analysis
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const decoded = await audioCtx.decodeAudioData(e.target.result.slice(0));
+      audioBuffer = decoded;
+      songDuration = decoded.duration;
+      analyzeAndGenerate(file.name, decoded);
+    } catch(err) {
+      // fallback: just use filename
+      analyzeAndGenerate(file.name, null);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+
+  // Animate progress
+  let p = 0;
+  const fill = document.getElementById('progressFill');
+  const iv = setInterval(() => {
+    p = Math.min(p + Math.random() * 12, 85);
+    fill.style.width = p + '%';
+    if (p >= 85) clearInterval(iv);
+  }, 150);
+  window._progressInterval = iv;
+  window._progressFill = fill;
+}
+
+// ─── Analyze ─────────────────────────────────────────────
+function analyzeAndGenerate(filename, buffer) {
+  const name = filename.toLowerCase().replace(/\.[^/.]+$/, '');
+
+  // Detect tempo from audio signal if available
+  let detectedBpm = null;
+  if (buffer) {
+    detectedBpm = estimateBpm(buffer);
+  }
+
+  // Analyze filename for style hints
+  const style = detectStyle(name);
+
+  setTimeout(() => {
+    clearInterval(window._progressInterval);
+    window._progressFill.style.width = '100%';
+
+    setTimeout(() => {
+      document.getElementById('analyzing').style.display = 'none';
+      buildBeat(style, detectedBpm, name);
+    }, 400);
+  }, 1800);
+}
+
+function estimateBpm(buffer) {
+  // Simple energy-based BPM estimation
+  try {
+    const data = buffer.getChannelData(0);
+    const sampleRate = buffer.sampleRate;
+    const windowSize = Math.floor(sampleRate * 0.01); // 10ms
+    const energies = [];
+
+    for (let i = 0; i < Math.min(data.length, sampleRate * 30); i += windowSize) {
+      let e = 0;
+      for (let j = i; j < i + windowSize && j < data.length; j++) {
+        e += data[j] * data[j];
+      }
+      energies.push(e / windowSize);
+    }
+
+    // Find peaks
+    const threshold = energies.reduce((a,b) => a+b,0) / energies.length * 1.5;
+    const peaks = [];
+    for (let i = 1; i < energies.length - 1; i++) {
+      if (energies[i] > threshold && energies[i] > energies[i-1] && energies[i] > energies[i+1]) {
+        peaks.push(i);
+      }
+    }
+
+    if (peaks.length < 4) return null;
+
+    // Average interval between peaks
+    const intervals = [];
+    for (let i = 1; i < Math.min(peaks.length, 20); i++) {
+      intervals.push(peaks[i] - peaks[i-1]);
+    }
+    const avgInterval = intervals.reduce((a,b)=>a+b,0)/intervals.length;
+    const secPerBeat = (avgInterval * windowSize) / sampleRate;
+    let estimatedBpm = Math.round(60 / secPerBeat);
+
+    // Clamp to musical range
+    while (estimatedBpm < 70) estimatedBpm *= 2;
+    while (estimatedBpm > 160) estimatedBpm /= 2;
+
+    return (estimatedBpm >= 70 && estimatedBpm <= 160) ? estimatedBpm : null;
+  } catch(e) { return null; }
+}
+
+function detectStyle(name) {
+  const styles = {
+    trap: { bpm:[130,145], vibe:'Trap', mood:'Dark & Atmospheric', key:'Minor', swing:0.1 },
+    drill: { bpm:[138,148], vibe:'Drill', mood:'Hard & Aggressive', key:'Minor', swing:0 },
+    boom: { bpm:[85,95], vibe:'Boom Bap', mood:'Soulful & Raw', key:'Minor', swing:0.25 },
+    soul: { bpm:[80,95], vibe:'Soul/R&B', mood:'Smooth & Warm', key:'Major', swing:0.2 },
+    afro: { bpm:[95,110], vibe:'Afrobeats', mood:'Vibrant & Rhythmic', key:'Major', swing:0.15 },
+    lo: { bpm:[75,90], vibe:'Lo-Fi', mood:'Chill & Hazy', key:'Minor', swing:0.3 },
+    hip: { bpm:[88,100], vibe:'Hip-Hop', mood:'Confident & Smooth', key:'Minor', swing:0.15 },
+  };
+
+  if (name.match(/trap|slide|drip|flex|gang|plug/)) return styles.trap;
+  if (name.match(/drill|opps|blocks|streets/)) return styles.drill;
+  if (name.match(/boom|bap|sample|chop|golden/)) return styles.boom;
+  if (name.match(/soul|love|heart|feel|bless|blessing/)) return styles.soul;
+  if (name.match(/afro|naija|amapiano|wave/)) return styles.afro;
+  if (name.match(/lo.?fi|chill|vibe|haze|smoke/)) return styles.lo;
+
+  // default: hip hop
+  return styles.hip;
+}
+
+// ─── Build Beat ───────────────────────────────────────────
+function buildBeat(style, detectedBpm, songName) {
+  bpm = detectedBpm || (style.bpm[0] + Math.floor(Math.random() * (style.bpm[1] - style.bpm[0])));
+
+  document.getElementById('bpmDisplay').textContent = bpm;
+  document.getElementById('tempoSlider').value = bpm;
+  document.getElementById('tempoVal').textContent = bpm;
+  document.getElementById('beatTitle').textContent = style.vibe.toUpperCase() + ' BEAT';
+  document.getElementById('beatStyle').textContent = style.mood.toUpperCase();
+
+  // Generate pattern based on style
+  generatePattern(style);
+  renderSequencer();
+  renderCards(style, songName, detectedBpm);
+  buildViz();
+  buildAiDesc(style, songName, detectedBpm);
+
+  document.getElementById('beatPanel').style.display = 'block';
+  setStatus('READY — HIT PLAY');
+}
+
+function generatePattern(style) {
+  // Reset
+  TRACKS.forEach(t => { patterns[t] = Array(16).fill(false); });
+
+  const v = style.vibe.toLowerCase();
+
+  if (v.includes('trap')) {
+    // Trap pattern
+    [0,8].forEach(i => patterns.KICK[i] = true);
+    patterns.KICK[12] = true;
+    [4,12].forEach(i => patterns.SNARE[i] = true);
+    for (let i=0;i<16;i+=2) patterns.HIHAT[i] = true;
+    patterns.HIHAT[3]=patterns.HIHAT[7]=patterns.HIHAT[11]=patterns.HIHAT[15]=true;
+    [0,3,8,11].forEach(i=>patterns.BASS[i]=true);
+    [2,6,10,14].forEach(i=>patterns.PERC[i]=true);
+  } else if (v.includes('drill')) {
+    [0,6,10].forEach(i=>patterns.KICK[i]=true);
+    [4,12].forEach(i=>patterns.SNARE[i]=true);
+    for(let i=0;i<16;i+=1) patterns.HIHAT[i]=true;
+    [0,4,8,9,12].forEach(i=>patterns.BASS[i]=true);
+    [2,7,14].forEach(i=>patterns.PERC[i]=true);
+  } else if (v.includes('boom')) {
+    [0,6,10,14].forEach(i=>patterns.KICK[i]=true);
+    [4,12].forEach(i=>patterns.SNARE[i]=true);
+    for(let i=0;i<16;i+=4) patterns.HIHAT[i]=true;
+    patterns.HIHAT[2]=patterns.HIHAT[6]=patterns.HIHAT[10]=patterns.HIHAT[14]=true;
+    [0,5,8,13].forEach(i=>patterns.BASS[i]=true);
+    [3,11].forEach(i=>patterns.PERC[i]=true);
+  } else if (v.includes('soul') || v.includes('r&b')) {
+    [0,10].forEach(i=>patterns.KICK[i]=true);
+    [4,12].forEach(i=>patterns.SNARE[i]=true);
+    for(let i=0;i<16;i+=2) patterns.HIHAT[i]=true;
+    [0,3,8,11].forEach(i=>patterns.BASS[i]=true);
+    [6,14].forEach(i=>patterns.PERC[i]=true);
+  } else if (v.includes('afro')) {
+    [0,4,8,12].forEach(i=>patterns.KICK[i]=true);
+    patterns.KICK[10]=true;
+    [4,12].forEach(i=>patterns.SNARE[i]=true);
+    for(let i=0;i<16;i+=1) if(i%4!==0) patterns.HIHAT[i]=true;
+    [0,3,6,9,12].forEach(i=>patterns.BASS[i]=true);
+    [1,5,9,13].forEach(i=>patterns.PERC[i]=true);
+  } else if (v.includes('lo')) {
+    [0,12].forEach(i=>patterns.KICK[i]=true);
+    patterns.KICK[9]=true;
+    [4,12].forEach(i=>patterns.SNARE[i]=true);
+    for(let i=0;i<16;i+=3) patterns.HIHAT[i]=true;
+    [0,7,10].forEach(i=>patterns.BASS[i]=true);
+    [5,13].forEach(i=>patterns.PERC[i]=true);
+  } else {
+    // Hip hop default
+    [0,8,12].forEach(i=>patterns.KICK[i]=true);
+    patterns.KICK[3]=true;
+    [4,12].forEach(i=>patterns.SNARE[i]=true);
+    for(let i=0;i<16;i+=2) patterns.HIHAT[i]=true;
+    patterns.HIHAT[14]=true;
+    [0,5,8,11].forEach(i=>patterns.BASS[i]=true);
+    [2,7,10,15].forEach(i=>patterns.PERC[i]=true);
+  }
+
+  // Randomize slightly
+  TRACKS.forEach(t => {
+    for(let i=0;i<16;i++) {
+      if(Math.random()<0.06) patterns[t][i] = !patterns[t][i];
+    }
+  });
+}
+
+function renderSequencer() {
+  const seq = document.getElementById('sequencer');
+  seq.innerHTML = '';
+  TRACKS.forEach((trackName, ti) => {
+    const row = document.createElement('div');
+    row.className = 'track';
+    const lbl = document.createElement('div');
+    lbl.className = 'track-name';
+    lbl.textContent = trackName;
+    row.appendChild(lbl);
+    const steps = document.createElement('div');
+    steps.className = 'steps';
+    for(let i=0;i<STEPS;i++){
+      const s = document.createElement('div');
+      s.className = 'step ' + TRACK_CLASSES[ti] + (patterns[trackName][i] ? ' on' : '');
+      s.dataset.track = trackName;
+      s.dataset.step = i;
+      s.onclick = () => {
+        patterns[trackName][i] = !patterns[trackName][i];
+        s.classList.toggle('on', patterns[trackName][i]);
+      };
+      steps.appendChild(s);
+    }
+    row.appendChild(steps);
+    seq.appendChild(row);
+  });
+}
+
+function renderCards(style, songName, detectedBpm) {
+  const cards = [
+    { label: 'VIBE', val: style.vibe },
+    { label: 'MOOD', val: style.mood },
+    { label: 'SCALE', val: style.key },
+    { label: 'BPM SOURCE', val: detectedBpm ? 'FROM SONG' : 'GENERATED' },
+  ];
+  document.getElementById('beatCards').innerHTML = cards.map(c =>
+    `<div class="beat-card"><div class="beat-card-label">${c.label}</div><div class="beat-card-val">${c.val}</div></div>`
+  ).join('');
+}
+
+function buildViz() {
+  const viz = document.getElementById('viz');
+  viz.innerHTML = '';
+  for(let i=0;i<40;i++){
+    const b = document.createElement('div');
+    b.className = 'viz-bar';
+    b.style.height = (4 + Math.random()*32) + 'px';
+    viz.appendChild(b);
+  }
+}
+
+function buildAiDesc(style, songName, detectedBpm) {
+  const clean = songName.replace(/[-_]/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+  const bpmNote = detectedBpm ? `detected ${detectedBpm} BPM from your audio` : `set at ${bpm} BPM`;
+  document.getElementById('aiDesc').textContent =
+    `"${clean}" reads as ${style.vibe} — ${style.mood.toLowerCase()} energy, ${style.key.toLowerCase()} feel. ` +
+    `Pattern ${bpmNote}. Drums tuned to your track's pocket. ` +
+    `Tap any step to edit. Hit ↺ for a fresh variation.`;
+}
+
+// ─── Tempo ────────────────────────────────────────────────
+document.getElementById('tempoSlider').addEventListener('input', function() {
+  bpm = parseInt(this.value);
+  document.getElementById('tempoVal').textContent = bpm;
+  document.getElementById('bpmDisplay').textContent = bpm;
+});
+
+// ─── Audio Engine ─────────────────────────────────────────
+function getCtx() {
+  if (!audioCtx || audioCtx.state === 'closed') {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function createDrum(type, time) {
+  const ctx = getCtx();
+  const buf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  const gain = ctx.createGain();
+  gain.connect(ctx.destination);
+
+  if (type === 'KICK') {
+    const osc = ctx.createOscillator();
+    osc.connect(gain);
+    osc.frequency.setValueAtTime(150, time);
+    osc.frequency.exponentialRampToValueAtTime(0.001, time + 0.4);
+    gain.gain.setValueAtTime(1.2, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.4);
+    osc.start(time); osc.stop(time + 0.4);
+  } else if (type === 'SNARE') {
+    const noise = ctx.createBufferSource();
+    for(let i=0;i<data.length;i++) data[i] = Math.random()*2-1;
+    noise.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 3000;
+    noise.connect(filter); filter.connect(gain);
+    gain.gain.setValueAtTime(0.8, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
+    noise.start(time); noise.stop(time + 0.18);
+    // tone layer
+    const osc = ctx.createOscillator();
+    const g2 = ctx.createGain();
+    osc.connect(g2); g2.connect(ctx.destination);
+    osc.frequency.value = 200;
+    g2.gain.setValueAtTime(0.4, time);
+    g2.gain.exponentialRampToValueAtTime(0.001, time+0.1);
+    osc.start(time); osc.stop(time+0.1);
+  } else if (type === 'HIHAT') {
+    const noise = ctx.createBufferSource();
+    for(let i=0;i<data.length;i++) data[i]=Math.random()*2-1;
+    noise.buffer=buf;
+    const filter=ctx.createBiquadFilter();
+    filter.type='highpass'; filter.frequency.value=8000;
+    noise.connect(filter); filter.connect(gain);
+    gain.gain.setValueAtTime(0.3, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time+0.05);
+    noise.start(time); noise.stop(time+0.05);
+  } else if (type === 'BASS') {
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.connect(gain);
+    osc.frequency.setValueAtTime(80, time);
+    osc.frequency.exponentialRampToValueAtTime(40, time+0.15);
+    gain.gain.setValueAtTime(0.5, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time+0.2);
+    osc.start(time); osc.stop(time+0.2);
+  } else if (type === 'PERC') {
+    const noise = ctx.createBufferSource();
+    for(let i=0;i<data.length;i++) data[i]=Math.random()*2-1;
+    noise.buffer=buf;
+    const filter=ctx.createBiquadFilter();
+    filter.type='bandpass'; filter.frequency.value=1200;
+    noise.connect(filter); filter.connect(gain);
+    gain.gain.setValueAtTime(0.25, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time+0.08);
+    noise.start(time); noise.stop(time+0.08);
+  }
+}
+
+let scheduleAheadTime = 0.1;
+let lookahead = 25.0;
+
+function scheduler() {
+  const ctx = getCtx();
+  while (nextNoteTime < ctx.currentTime + scheduleAheadTime) {
+    scheduleStep(currentStep, nextNoteTime);
+    advanceStep();
+  }
+  schedulerTimer = setTimeout(scheduler, lookahead);
+}
+
+function scheduleStep(step, time) {
+  TRACKS.forEach(trackName => {
+    if (patterns[trackName][step]) {
+      createDrum(trackName, time);
+    }
+  });
+
+  // Update UI
+  requestAnimationFrame(() => highlightStep(step));
+}
+
+function highlightStep(step) {
+  document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll(`.step[data-step="${step}"]`).forEach(el => el.classList.add('active'));
+
+  // Viz
+  const bars = document.querySelectorAll('.viz-bar');
+  bars.forEach((b,i) => {
+    const active = Math.floor(i/(bars.length/STEPS)) === step;
+    b.classList.toggle('active', active);
+    if(active) b.style.height = (12+Math.random()*28)+'px';
+  });
+}
+
+function advanceStep() {
+  const secondsPerBeat = 60.0 / bpm;
+  const secondsPerStep = secondsPerBeat / 4;
+  nextNoteTime += secondsPerStep;
+  currentStep = (currentStep + 1) % STEPS;
+}
+
+function playBeat() {
+  if (isPlaying) return;
+  const ctx = getCtx();
+  isPlaying = true;
+  currentStep = 0;
+  nextNoteTime = ctx.currentTime + 0.05;
+  scheduler();
+  document.getElementById('playBtn').disabled = true;
+  document.getElementById('stopBtn').disabled = false;
+  setStatus('PLAYING', 'playing');
+}
+
+function stopBeat() {
+  isPlaying = false;
+  clearTimeout(schedulerTimer);
+  document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.viz-bar').forEach(b => b.classList.remove('active'));
+  document.getElementById('playBtn').disabled = false;
+  document.getElementById('stopBtn').disabled = true;
+  setStatus('STOPPED');
+}
+
+function regenBeat() {
+  const wasPlaying = isPlaying;
+  if (wasPlaying) stopBeat();
+  const styleName = document.getElementById('beatStyle').textContent;
+  const allStyles = {
+    'DARK & ATMOSPHERIC': { bpm:[130,145], vibe:'Trap', mood:'Dark & Atmospheric', key:'Minor' },
+    'HARD & AGGRESSIVE': { bpm:[138,148], vibe:'Drill', mood:'Hard & Aggressive', key:'Minor' },
+    'SOULFUL & RAW': { bpm:[85,95], vibe:'Boom Bap', mood:'Soulful & Raw', key:'Minor' },
+    'SMOOTH & WARM': { bpm:[80,95], vibe:'Soul/R&B', mood:'Smooth & Warm', key:'Major' },
+    'VIBRANT & RHYTHMIC': { bpm:[95,110], vibe:'Afrobeats', mood:'Vibrant & Rhythmic', key:'Major' },
+    'CHILL & HAZY': { bpm:[75,90], vibe:'Lo-Fi', mood:'Chill & Hazy', key:'Minor' },
+    'CONFIDENT & SMOOTH': { bpm:[88,100], vibe:'Hip-Hop', mood:'Confident & Smooth', key:'Minor' },
+  };
+  const style = allStyles[styleName] || allStyles['CONFIDENT & SMOOTH'];
+  generatePattern(style);
+  renderSequencer();
+  if (wasPlaying) setTimeout(playBeat, 100);
+  setStatus('NEW PATTERN GENERATED');
+}
+
+function setStatus(msg, cls='') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status ' + cls;
+}
+</script>
+</body>
+</html>
